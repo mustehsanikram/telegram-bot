@@ -19,4 +19,4 @@ progress tracker.
 ## Post-MVP
 
 - [ ] 7. **Automatic payment collection** - accept payment inside Telegram so subscriptions extend without the admin recording anything by hand
-- [ ] 8. **Deployment readiness** - pick the host, add the provider config, verify an always-on single process, and smoke-test against the real channel
+- [x] 8. **Deployment readiness** - pick the host, add the provider config, verify an always-on single process, and smoke-test against the real channel

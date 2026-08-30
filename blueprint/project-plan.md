@@ -65,7 +65,7 @@ No payment card data is ever stored. No styling content or client photos are sto
 - Python 3.12, managed by uv
 - aiogram 3 for the Telegram bot, long polling
 - SQLAlchemy 2 with Alembic migrations
-- SQLite to start, with the option to move to Postgres if the client list grows
+- PostgreSQL in deployment, SQLite for local development and tests
 - APScheduler for the daily expiry sweep and reminder jobs
 - pytest, ruff, and mypy as the local quality gates
 
@@ -90,13 +90,17 @@ Telegram chat conventions, nothing invented:
 
 Source lives at `https://github.com/mustehsanikram/telegram-bot`.
 
-> TODO: hosting target not yet chosen. A long-polling bot needs an always-on
-> process, so a sleeping free tier will not work. Candidates are Render (paid
-> background worker), Fly.io, or an existing VPS with systemd or Docker.
+Hosted on **Railway** as a worker service. A long-polling bot needs an always-on
+process with no inbound HTTP, which rules out anything that sleeps and means no
+port binding or health check path is involved.
+
+Railway's filesystem is ephemeral, so storage is a managed **Railway Postgres**
+rather than a SQLite file: a SQLite database on the container disk would be
+erased on every redeploy, taking the client registry with it.
 
 Known requirements whatever the host:
 
 - Always-on single process. Running two instances would double-send reminders and conflict on polling.
-- Persistent disk if SQLite is kept, otherwise a managed Postgres.
+- Managed Postgres. The container filesystem does not survive a redeploy.
 - Env vars by name: `BOT_TOKEN`, `PRIVATE_CHANNEL_ID`, `ADMIN_USER_IDS`, `DATABASE_URL`.
 - No inbound HTTP needed while on long polling. Switching to webhooks would add a public HTTPS endpoint and a health check path.

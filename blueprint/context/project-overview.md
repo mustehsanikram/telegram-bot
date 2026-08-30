@@ -1,6 +1,6 @@
 # StyleBot - Project Overview
 
-<!-- blueprint:source-hash 3d5f61a6805f7e9510a3a1f3a59cd823e4e2e0fa80715c960cec7372024b9859 -->
+<!-- blueprint:source-hash 9e05e237f7387adaa20d3f0322a2d53bf5271df469c019c2843aa65efda2e757 -->
 
 > **Generated file. Don't hand-edit.** Re-run `/overview` when `project-plan.md`
 > or `build-plan.md` changes materially.
@@ -119,7 +119,7 @@ as integer minor units and timestamps as timezone-aware UTC, per
 | **Python 3.12 + uv** | Runtime and toolchain; uv owns the venv and lockfile |
 | **aiogram 3** | Telegram bot framework, long polling |
 | **SQLAlchemy 2 + Alembic** | ORM and schema migrations |
-| **SQLite** | Storage to start; Postgres if the client list grows |
+| **PostgreSQL** | Storage in deployment (Railway Postgres); SQLite locally and in tests |
 | **APScheduler** | Daily expiry sweep (feature 5) and reminder jobs (feature 6) |
 | **pytest, ruff, mypy** | Local quality gates; tests are a gate for logic-bearing steps |
 
@@ -155,12 +155,13 @@ There is no web UI. The command surface is the interface:
 
 Source lives at `https://github.com/mustehsanikram/telegram-bot`.
 
-> TODO: hosting target not chosen. Tracked as build-plan item 8.
+Hosted on **Railway** as a worker service: long polling, no inbound HTTP, so no
+port binding and no health check path.
 
-Constraints that hold whatever the host:
+Constraints:
 
-- **Always-on single process.** Two instances would conflict on polling and double-send reminders. This rules out a sleeping free tier.
-- **Persistence** - a persistent disk if SQLite is kept, otherwise managed Postgres.
+- **Always-on single process.** Two pollers conflict on `getUpdates` and would double-send reminders, so the service stays at one replica.
+- **Managed Postgres.** Railway's container filesystem is ephemeral; a SQLite file would be erased on every redeploy.
 - **Env vars by name** - `BOT_TOKEN`, `PRIVATE_CHANNEL_ID`, `ADMIN_USER_IDS`, `DATABASE_URL`.
 - **No inbound HTTP** while on long polling. Moving to webhooks would add a public HTTPS endpoint and a health check path.
 - **Channel permission** - the bot must be an admin of the private channel with rights to invite and restrict members, or feature 4 fails at runtime.
@@ -169,8 +170,7 @@ Constraints that hold whatever the host:
 
 Resolve in the plans, then re-run `/overview`.
 
-1. **Hosting** - not chosen. Build-plan item 8.
-2. **Currency and price** - no currency or subscription price is specified. `Payment.currency` exists but nothing says what goes in it.
-3. **Plan length** - `plan_length_days` has no value. Monthly (30 days) is assumed but never stated.
-4. **Reminder lead time** - the scaffolded `SubscriptionWindow` defaults to 3 days. The plans never state the intended lead time.
-5. **Scheduler timezone** - "daily" is undefined without one. Reminder timing depends on it.
+1. **Currency and price** - no currency or subscription price is specified. `Payment.currency` exists but nothing says what goes in it.
+2. **Plan length** - `plan_length_days` has no value. Monthly (30 days) is assumed but never stated.
+3. **Reminder lead time** - the scaffolded `SubscriptionWindow` defaults to 3 days. The plans never state the intended lead time.
+4. **Scheduler timezone** - "daily" is undefined without one. Reminder timing depends on it.
