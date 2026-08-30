@@ -203,6 +203,9 @@ is needed.
 - Lint: `uv run ruff check .`
 - Format: `uv run ruff format .`
 - Typecheck: `uv run mypy`
+- Migration (add): `uv run alembic revision --autogenerate -m "<name>"`
+- Migration (apply): `uv run alembic upgrade head`
+- Migration (status): `uv run alembic current`
 
 Tests are a gate. `uv run pytest` is configured and passing, so any step that adds
 logic ships a passing test with it.

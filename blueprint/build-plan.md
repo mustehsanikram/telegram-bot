@@ -7,7 +7,7 @@ progress tracker.
 ## MVP
 
 - [ ] 1. **Client registry** - prospective clients reach the bot, the admin approves them, and the registry lists everyone
-  - [ ] 1a. **Persistence foundation** - database engine, session, Alembic setup, the `Client` model, and the first migration
+  - [x] 1a. **Persistence foundation** - database engine, session, Alembic setup, the `Client` model, and the first migration
   - [ ] 1b. **Client intake** - `/start` records a prospective client as pending, and an approved admin approves or declines them
   - [ ] 1c. **Client listing** - `/clients` lists pending and approved clients with their registry details
 - [ ] 2. **Subscription periods** - a paid-through date per client, a derived active/expiring/expired status, and `/status` for the client to check their own
