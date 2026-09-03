@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import pytest
 
@@ -7,11 +7,13 @@ from stylebot.handlers.notifications import new_client_message
 from stylebot.services.clients import ClientState, DecisionOutcome
 from stylebot.services.formatting import (
     EMPTY_REGISTRY,
+    SUBSCRIPTION_LABELS,
     TELEGRAM_MESSAGE_LIMIT,
     ClientRow,
     escape_html,
     format_client_list,
 )
+from stylebot.services.subscriptions import SubscriptionStatus
 
 # A Telegram display name is whatever the client typed into their profile.
 HOSTILE_NAME = "<b>Ada</b> </code> & co"
@@ -147,3 +149,50 @@ def test_a_short_list_is_not_trimmed() -> None:
 
     assert "more not shown." not in text
     assert text.count("<code>") == 5
+
+
+def approved_row(name: str, uid: int, paid_through: date | None,
+                 status: SubscriptionStatus | None) -> ClientRow:
+    return ClientRow(
+        display_name=name,
+        telegram_user_id=uid,
+        state=ClientState.APPROVED,
+        first_seen_at=datetime(2026, 3, 1, 12, 0, tzinfo=UTC),
+        paid_through=paid_through,
+        subscription=status,
+    )
+
+
+def test_listing_tells_the_four_subscription_cases_apart() -> None:
+    text = format_client_list(
+        [
+            approved_row("Active One", 1, date(2026, 4, 20), SubscriptionStatus.ACTIVE),
+            approved_row("Expiring One", 2, date(2026, 3, 4), SubscriptionStatus.EXPIRING_SOON),
+            approved_row("Expired One", 3, date(2026, 2, 1), SubscriptionStatus.EXPIRED),
+            approved_row("Unpaid One", 4, None, None),
+        ]
+    )
+
+    assert "active to 20 April 2026" in text
+    assert "expiring, paid to 4 March 2026" in text
+    assert "expired on 1 February 2026" in text
+    assert "no payment recorded" in text
+
+
+def test_a_pending_client_shows_no_subscription_line() -> None:
+    """Nothing has been paid for someone not yet approved, so the line is noise."""
+    text = format_client_list([row("Ada", 1, ClientState.PENDING)])
+
+    assert "no payment recorded" not in text
+    assert "active to" not in text
+
+
+def test_an_approved_client_without_a_subscription_says_so() -> None:
+    text = format_client_list([approved_row("Grace", 9, None, None)])
+
+    assert "no payment recorded" in text
+
+
+def test_every_subscription_status_has_a_label() -> None:
+    """A missing label would raise KeyError while rendering the admin's list."""
+    assert set(SUBSCRIPTION_LABELS) == set(SubscriptionStatus)

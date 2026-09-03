@@ -1,9 +1,16 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from stylebot.db import repository
+from stylebot.db.models import Client, Subscription
 from stylebot.services.clients import ClientState, client_state
+from stylebot.services.subscriptions import (
+    DEFAULT_PLAN_LENGTH_DAYS,
+    SubscriptionStatus,
+    window_from_paid_through,
+)
 
 FIRST_SEEN = datetime(2026, 3, 1, 10, 0, tzinfo=UTC)
 APPROVED_ON = datetime(2026, 3, 2, 11, 0, tzinfo=UTC)
@@ -56,7 +63,7 @@ async def test_list_clients_orders_pending_first_then_by_arrival(
 
     listed = await repository.list_clients(session)
 
-    assert [c.display_name for c in listed] == [
+    assert [c.display_name for c, _ in listed] == [
         "Pending Early",
         "Pending Late",
         "Approved Early",
@@ -75,3 +82,60 @@ async def test_list_clients_excludes_removed(session: AsyncSession) -> None:
 
 async def test_list_clients_on_an_empty_registry(session: AsyncSession) -> None:
     assert await repository.list_clients(session) == []
+
+
+async def seed_subscription(
+    session: AsyncSession, telegram_user_id: int, paid_through: date
+) -> Client:
+    """Feature 3 owns creating these, so tests seed them directly."""
+    client = await repository.create_pending(session, telegram_user_id, "Ada", FIRST_SEEN)
+    await repository.mark_approved(session, client, APPROVED_ON)
+    session.add(
+        Subscription(
+            client_id=client.id,
+            paid_through=paid_through,
+            plan_length_days=DEFAULT_PLAN_LENGTH_DAYS,
+            updated_at=APPROVED_ON,
+        )
+    )
+    await session.flush()
+    return client
+
+
+async def test_subscription_reads_back_for_its_client(session: AsyncSession) -> None:
+    client = await seed_subscription(session, 4242, date(2026, 1, 30))
+
+    found = await repository.get_subscription_for_client(session, client.id)
+
+    assert found is not None
+    assert found.paid_through == date(2026, 1, 30)
+    assert found.plan_length_days == DEFAULT_PLAN_LENGTH_DAYS
+
+
+async def test_a_client_without_a_subscription_reads_as_none(session: AsyncSession) -> None:
+    """The normal state for an approved client until feature 3 records a payment."""
+    client = await repository.create_pending(session, 7, "Grace", FIRST_SEEN)
+    await repository.mark_approved(session, client, APPROVED_ON)
+
+    assert await repository.get_subscription_for_client(session, client.id) is None
+
+
+@pytest.mark.parametrize(
+    ("today", "expected"),
+    [
+        (date(2026, 1, 26), SubscriptionStatus.ACTIVE),
+        (date(2026, 1, 28), SubscriptionStatus.EXPIRING_SOON),
+        (date(2026, 1, 31), SubscriptionStatus.EXPIRED),
+    ],
+    ids=["inside the window", "final three days", "after paid_through"],
+)
+async def test_stored_date_drives_the_status(
+    session: AsyncSession, today: date, expected: SubscriptionStatus
+) -> None:
+    client = await seed_subscription(session, 4242, date(2026, 1, 30))
+
+    subscription = await repository.get_subscription_for_client(session, client.id)
+    assert subscription is not None
+
+    window = window_from_paid_through(subscription.paid_through)
+    assert window.status_on(today) is expected

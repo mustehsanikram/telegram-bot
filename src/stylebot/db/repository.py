@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from stylebot.db.models import Client
+from stylebot.db.models import Client, Subscription
 
 
 async def get_by_telegram_id(session: AsyncSession, telegram_user_id: int) -> Client | None:
@@ -41,15 +41,27 @@ async def mark_removed(session: AsyncSession, client: Client) -> None:
     await session.flush()
 
 
-async def list_clients(session: AsyncSession) -> Sequence[Client]:
-    """Registry rows for display: pending first, then oldest arrival first.
+async def list_clients(session: AsyncSession) -> Sequence[tuple[Client, Subscription | None]]:
+    """Registry rows for display, each with its subscription if it has one.
 
-    Removed clients are excluded. Ordering on `approved_at IS NOT NULL` puts
-    pending (false) ahead of approved (true) on both SQLite and Postgres.
+    Pending first, then oldest arrival first; removed clients are excluded.
+    Ordering on `approved_at IS NOT NULL` puts pending (false) ahead of approved
+    (true) on both SQLite and Postgres. The outer join keeps this one query
+    rather than a lookup per client.
     """
     result = await session.execute(
-        select(Client)
+        select(Client, Subscription)
+        .outerjoin(Subscription, Subscription.client_id == Client.id)
         .where(Client.is_active.is_(True))
         .order_by(Client.approved_at.is_not(None), Client.first_seen_at)
     )
-    return result.scalars().all()
+    return [(client, subscription) for client, subscription in result.all()]
+
+
+async def get_subscription_for_client(
+    session: AsyncSession, client_id: int
+) -> Subscription | None:
+    result = await session.execute(
+        select(Subscription).where(Subscription.client_id == client_id)
+    )
+    return result.scalar_one_or_none()

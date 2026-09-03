@@ -1,6 +1,6 @@
 # StyleBot - Project Overview
 
-<!-- blueprint:source-hash 9e05e237f7387adaa20d3f0322a2d53bf5271df469c019c2843aa65efda2e757 -->
+<!-- blueprint:source-hash 720ff2189b136b2842581e5dbdc59fa6f44a8e45b8c7c1a3655dafa790b91528 -->
 
 > **Generated file. Don't hand-edit.** Re-run `/overview` when `project-plan.md`
 > or `build-plan.md` changes materially.
@@ -72,8 +72,17 @@ as integer minor units and timestamps as timezone-aware UTC, per
 - `id` (int, PK)
 - `client_id` (int, FK -> Client, unique) - one current subscription per client
 - `paid_through` (date) - the authoritative field; every status decision reads this
-- `plan_length_days` (int) - what one payment buys, so item 3 knows how far to extend
+- `plan_length_days` (int, default 30) - what one payment buys, so item 3 knows how far to extend
 - `updated_at` (datetime, UTC)
+
+> **Settled parameters.** A period is **30 days**. A subscription reads as
+> `expiring_soon` in its final **3 days**, the same window feature 6 sends its
+> reminder in. "Today" is the **UTC** date, so a subscription flips to expired at
+> midnight UTC after `paid_through`.
+
+> **No subscription exists until a payment is recorded.** Feature 3 creates the
+> row. Until then an approved client has none, and `/status` must say so rather
+> than assume expired.
 
 > **Locked shape.** Status is *derived* from `paid_through`, never stored as a
 > column. `SubscriptionWindow.status_on(today)` in
@@ -170,7 +179,4 @@ Constraints:
 
 Resolve in the plans, then re-run `/overview`.
 
-1. **Currency and price** - no currency or subscription price is specified. `Payment.currency` exists but nothing says what goes in it.
-2. **Plan length** - `plan_length_days` has no value. Monthly (30 days) is assumed but never stated.
-3. **Reminder lead time** - the scaffolded `SubscriptionWindow` defaults to 3 days. The plans never state the intended lead time.
-4. **Scheduler timezone** - "daily" is undefined without one. Reminder timing depends on it.
+1. **Currency and price** - no currency or subscription price is specified. `Payment.currency` exists but nothing says what goes in it. Needed by feature 3.

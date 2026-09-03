@@ -53,12 +53,18 @@ therefore always client-initiated and admin-approved.
 
 - **Clients** - Telegram user id, display name, when they first messaged the bot, whether
   the admin has approved them, whether they are still active
-- **Subscriptions** - which client, paid-through date, current state, plan length
+- **Subscriptions** - which client, paid-through date, plan length in days
 - **Payments** - which client, amount, currency, when it was recorded, who recorded it, what period it bought
 - **Channel access events** - which client, granted or revoked, when, and why (paid, lapsed, manual override)
 - **Reminder log** - which client, which reminder, when it was sent, so the same reminder is never sent twice
 
 No payment card data is ever stored. No styling content or client photos are stored.
+
+### Subscription rules
+
+- **One period is 30 days.** Stored per subscription rather than as a global constant, so an individual client can be put on a different length later without a migration.
+- **A subscription counts as expiring soon in its final 3 days.** That same window is when the renewal reminder goes out, so the client is warned and the status agrees.
+- **Day boundaries are UTC.** A subscription flips to expired at midnight UTC on the day after `paid_through`. Storing and comparing in one zone avoids a client and the stylist disagreeing about which day it is.
 
 ## 5. Tech - What stack are we using?
 

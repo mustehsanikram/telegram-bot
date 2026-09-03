@@ -15,6 +15,7 @@ from stylebot.handlers.notifications import (
 from stylebot.services.clients import DecisionOutcome, client_state, parse_telegram_id
 from stylebot.services.formatting import ClientRow, escape_html, format_client_list
 from stylebot.services.intake import approve_client, decline_client
+from stylebot.services.subscriptions import utc_today, window_from_paid_through
 
 router = Router(name="admin")
 
@@ -52,15 +53,21 @@ async def refuse_non_admin(message: Message) -> None:
 
 @router.message(Command("clients"), IsAdmin())
 async def handle_clients(message: Message, session: AsyncSession) -> None:
-    clients = await repository.list_clients(session)
+    today = utc_today()
     rows = [
         ClientRow(
             display_name=client.display_name,
             telegram_user_id=client.telegram_user_id,
             state=client_state(client.approved_at, client.is_active),
             first_seen_at=client.first_seen_at,
+            paid_through=subscription.paid_through if subscription is not None else None,
+            subscription=(
+                window_from_paid_through(subscription.paid_through).status_on(today)
+                if subscription is not None
+                else None
+            ),
         )
-        for client in clients
+        for client, subscription in await repository.list_clients(session)
     ]
     await message.answer(format_client_list(rows))
 

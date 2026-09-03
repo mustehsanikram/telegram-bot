@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from stylebot.db import models  # noqa: F401  registers Client on Base.metadata
 from stylebot.db.base import Base
+from stylebot.db.types import UtcDateTime
 
 # Settings is deliberately not imported here: it requires BOT_TOKEN and
 # PRIVATE_CHANNEL_ID, so a migration run without a populated .env would fail
@@ -24,10 +25,23 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def render_item(type_: str, obj: object, autogen_context: object) -> str | bool:
+    """Keep migrations dependent on SQLAlchemy alone.
+
+    Autogenerate would otherwise emit stylebot.db.types.UtcDateTime into the
+    revision, which does not import it and would break anyway if the class were
+    ever renamed. The stored SQL type is what matters, so render that.
+    """
+    if type_ == "type" and isinstance(obj, UtcDateTime):
+        return "sa.DateTime(timezone=True)"
+    return False
+
+
 def run_migrations_offline() -> None:
     context.configure(
         url=config.get_main_option("sqlalchemy.url"),
         target_metadata=target_metadata,
+        render_item=render_item,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
     )
@@ -42,6 +56,7 @@ def do_run_migrations(connection: Connection) -> None:
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
+        render_item=render_item,
         render_as_batch=connection.dialect.name == "sqlite",
     )
 
