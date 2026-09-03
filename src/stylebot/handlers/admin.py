@@ -5,18 +5,21 @@ from aiogram.filters import Command, CommandObject
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from stylebot.db import repository
 from stylebot.handlers.filters import IsAdmin
 from stylebot.handlers.notifications import (
     APPROVED_NOTICE,
     DECLINED_NOTICE,
     notify_client_of_decision,
 )
-from stylebot.services.clients import DecisionOutcome, parse_telegram_id
+from stylebot.services.clients import DecisionOutcome, client_state, parse_telegram_id
+from stylebot.services.formatting import ClientRow, escape_html, format_client_list
 from stylebot.services.intake import approve_client, decline_client
 
 router = Router(name="admin")
 
-ADMIN_COMMANDS = ("approve", "decline")
+# Drives the inverted-guard refusal below, so every admin command belongs here.
+ADMIN_COMMANDS = ("approve", "decline", "clients")
 
 REFUSAL = "That command is for your stylist only."
 
@@ -47,6 +50,21 @@ async def refuse_non_admin(message: Message) -> None:
     await message.answer(REFUSAL)
 
 
+@router.message(Command("clients"), IsAdmin())
+async def handle_clients(message: Message, session: AsyncSession) -> None:
+    clients = await repository.list_clients(session)
+    rows = [
+        ClientRow(
+            display_name=client.display_name,
+            telegram_user_id=client.telegram_user_id,
+            state=client_state(client.approved_at, client.is_active),
+            first_seen_at=client.first_seen_at,
+        )
+        for client in clients
+    ]
+    await message.answer(format_client_list(rows))
+
+
 @router.message(Command("approve"), IsAdmin())
 async def handle_approve(message: Message, command: CommandObject, session: AsyncSession) -> None:
     await _decide(message, command, session, approving=True)
@@ -70,7 +88,7 @@ async def _decide(
     else:
         outcome, client = await decline_client(session, target)
 
-    name = client.display_name if client is not None else str(target)
+    name = escape_html(client.display_name) if client is not None else str(target)
     await message.answer(CONFIRMATIONS[outcome].format(name=name, target=target))
 
     notice = CLIENT_NOTICES.get(outcome)

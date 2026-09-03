@@ -4,13 +4,15 @@ from collections.abc import Sequence
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError, TelegramForbiddenError
 
+from stylebot.services.formatting import escape_html
+
 logger = logging.getLogger(__name__)
 
 
 def new_client_message(display_name: str, telegram_user_id: int) -> str:
     return (
         f"New client waiting for approval.\n\n"
-        f"Name: {display_name}\n"
+        f"Name: {escape_html(display_name)}\n"
         f"Telegram id: <code>{telegram_user_id}</code>\n\n"
         f"Approve with /approve {telegram_user_id}\n"
         f"Decline with /decline {telegram_user_id}"

@@ -32,3 +32,46 @@ async def test_mark_removed_outranks_approval(session: AsyncSession) -> None:
     await repository.mark_removed(session, client)
 
     assert client_state(client.approved_at, client.is_active) is ClientState.REMOVED
+
+
+async def test_list_clients_orders_pending_first_then_by_arrival(
+    session: AsyncSession,
+) -> None:
+    # Seeded out of display order on purpose.
+    approved_early = await repository.create_pending(
+        session, 1, "Approved Early", datetime(2026, 1, 1, tzinfo=UTC)
+    )
+    await repository.mark_approved(session, approved_early, APPROVED_ON)
+
+    pending_late = await repository.create_pending(
+        session, 2, "Pending Late", datetime(2026, 5, 1, tzinfo=UTC)
+    )
+    pending_early = await repository.create_pending(
+        session, 3, "Pending Early", datetime(2026, 2, 1, tzinfo=UTC)
+    )
+    removed = await repository.create_pending(
+        session, 4, "Removed", datetime(2026, 1, 15, tzinfo=UTC)
+    )
+    await repository.mark_removed(session, removed)
+
+    listed = await repository.list_clients(session)
+
+    assert [c.display_name for c in listed] == [
+        "Pending Early",
+        "Pending Late",
+        "Approved Early",
+    ]
+    assert pending_early.id is not None and pending_late.id is not None
+
+
+async def test_list_clients_excludes_removed(session: AsyncSession) -> None:
+    client = await repository.create_pending(session, 7, "Gone", FIRST_SEEN)
+    assert len(await repository.list_clients(session)) == 1
+
+    await repository.mark_removed(session, client)
+
+    assert await repository.list_clients(session) == []
+
+
+async def test_list_clients_on_an_empty_registry(session: AsyncSession) -> None:
+    assert await repository.list_clients(session) == []

@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from datetime import datetime
 
 from sqlalchemy import select
@@ -38,3 +39,17 @@ async def mark_approved(session: AsyncSession, client: Client, approved_at: date
 async def mark_removed(session: AsyncSession, client: Client) -> None:
     client.is_active = False
     await session.flush()
+
+
+async def list_clients(session: AsyncSession) -> Sequence[Client]:
+    """Registry rows for display: pending first, then oldest arrival first.
+
+    Removed clients are excluded. Ordering on `approved_at IS NOT NULL` puts
+    pending (false) ahead of approved (true) on both SQLite and Postgres.
+    """
+    result = await session.execute(
+        select(Client)
+        .where(Client.is_active.is_(True))
+        .order_by(Client.approved_at.is_not(None), Client.first_seen_at)
+    )
+    return result.scalars().all()
